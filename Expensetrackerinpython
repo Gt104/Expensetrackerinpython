@@ -1,0 +1,84 @@
+import csv
+import os
+
+FILE_NAME = "expenses.csv"
+
+# Load expenses
+def load_expenses():
+    expenses = []
+    if os.path.exists(FILE_NAME):
+        with open(FILE_NAME, newline="") as f:
+            reader = csv.reader(f)
+            expenses = list(reader)
+    return expenses
+
+# Save expenses
+def save_expenses(expenses):
+    with open(FILE_NAME, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerows(expenses)
+
+# Display expenses
+def show_expenses(expenses):
+    if not expenses:
+        print("\nNo expenses found.\n")
+        return
+    print("\nYour Expenses:")
+    for i, exp in enumerate(expenses, start=1):
+        print(f"{i}. Amount: {exp[0]} | Category: {exp[1]} | Note: {exp[2]}")
+    print()
+
+# Add expense
+def add_expense(expenses):
+    amount = input("Enter amount: ").strip()
+    category = input("Enter category: ").strip()
+    note = input("Enter note: ").strip()
+    expenses.append([amount, category, note])
+    save_expenses(expenses)
+    print("Expense added!\n")
+
+# Filter by category
+def filter_category(expenses):
+    cat = input("Enter category to filter: ").strip()
+    filtered = [exp for exp in expenses if exp[1].lower() == cat.lower()]
+    if not filtered:
+        print("\nNo expenses in this category.\n")
+        return
+    print(f"\nExpenses in {cat}:")
+    for exp in filtered:
+        print(f"Amount: {exp[0]} | Note: {exp[2]}")
+    print()
+
+# Total spent
+def total_spent(expenses):
+    total = sum(float(exp[0]) for exp in expenses)
+    print(f"\nTotal Spent: {total}\n")
+
+# Main menu
+def main():
+    expenses = load_expenses()
+    while True:
+        print("=== EXPENSE TRACKER ===")
+        print("1. View Expenses")
+        print("2. Add Expense")
+        print("3. Filter by Category")
+        print("4. Show Total Spent")
+        print("5. Exit")
+
+        choice = input("Choose option: ")
+        if choice == "1":
+            show_expenses(expenses)
+        elif choice == "2":
+            add_expense(expenses)
+        elif choice == "3":
+            filter_category(expenses)
+        elif choice == "4":
+            total_spent(expenses)
+        elif choice == "5":
+            print("Goodbye!")
+            break
+        else:
+            print("Invalid option.\n")
+
+if __name__ == "__main__":
+    main()
