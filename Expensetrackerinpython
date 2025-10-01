@@ -1,84 +1,142 @@
-import csv
+import tkinter as tk
+from tkinter import messagebox, simpledialog, filedialog, ttk
+import json
 import os
 
-FILE_NAME = "expenses.csv"
+EXPENSE_FILE = "expenses.json"
 
-# Load expenses
-def load_expenses():
-    expenses = []
-    if os.path.exists(FILE_NAME):
-        with open(FILE_NAME, newline="") as f:
-            reader = csv.reader(f)
-            expenses = list(reader)
-    return expenses
+class ExpenseTracker:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Expense Tracker")
+        self.root.geometry("700x450")
+        self.expenses = self.load_expenses()
 
-# Save expenses
-def save_expenses(expenses):
-    with open(FILE_NAME, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerows(expenses)
+        # Filter frame
+        filter_frame = tk.Frame(root)
+        filter_frame.pack(pady=5)
+        tk.Label(filter_frame, text="Filter by Category:").pack(side=tk.LEFT, padx=5)
+        self.filter_var = tk.StringVar()
+        self.filter_entry = tk.Entry(filter_frame, textvariable=self.filter_var)
+        self.filter_entry.pack(side=tk.LEFT)
+        tk.Button(filter_frame, text="Apply", command=self.apply_filter).pack(side=tk.LEFT, padx=5)
+        tk.Button(filter_frame, text="Reset", command=self.reset_filter).pack(side=tk.LEFT, padx=5)
 
-# Display expenses
-def show_expenses(expenses):
-    if not expenses:
-        print("\nNo expenses found.\n")
-        return
-    print("\nYour Expenses:")
-    for i, exp in enumerate(expenses, start=1):
-        print(f"{i}. Amount: {exp[0]} | Category: {exp[1]} | Note: {exp[2]}")
-    print()
+        # Treeview for expenses
+        columns = ("Category", "Amount")
+        self.tree = ttk.Treeview(root, columns=columns, show="headings", selectmode="browse")
+        self.tree.heading("Category", text="Category")
+        self.tree.heading("Amount", text="Amount")
+        self.tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
-# Add expense
-def add_expense(expenses):
-    amount = input("Enter amount: ").strip()
-    category = input("Enter category: ").strip()
-    note = input("Enter note: ").strip()
-    expenses.append([amount, category, note])
-    save_expenses(expenses)
-    print("Expense added!\n")
+        # Buttons frame
+        btn_frame = tk.Frame(root)
+        btn_frame.pack(pady=5)
+        tk.Button(btn_frame, text="Add Expense", command=self.add_expense, width=15, bg="#90ee90").grid(row=0, column=0, padx=5)
+        tk.Button(btn_frame, text="Edit Expense", command=self.edit_expense, width=15, bg="#ffd700").grid(row=0, column=1, padx=5)
+        tk.Button(btn_frame, text="Delete Expense", command=self.delete_expense, width=15, bg="#ff7f7f").grid(row=0, column=2, padx=5)
+        tk.Button(btn_frame, text="Export Expenses", command=self.export_expenses, width=15, bg="#add8e6").grid(row=0, column=3, padx=5)
+        tk.Button(btn_frame, text="View Total", command=self.view_total, width=15, bg="#ffb347").grid(row=0, column=4, padx=5)
 
-# Filter by category
-def filter_category(expenses):
-    cat = input("Enter category to filter: ").strip()
-    filtered = [exp for exp in expenses if exp[1].lower() == cat.lower()]
-    if not filtered:
-        print("\nNo expenses in this category.\n")
-        return
-    print(f"\nExpenses in {cat}:")
-    for exp in filtered:
-        print(f"Amount: {exp[0]} | Note: {exp[2]}")
-    print()
+        self.refresh_treeview()
 
-# Total spent
-def total_spent(expenses):
-    total = sum(float(exp[0]) for exp in expenses)
-    print(f"\nTotal Spent: {total}\n")
+    # Load and save
+    def load_expenses(self):
+        if os.path.exists(EXPENSE_FILE):
+            with open(EXPENSE_FILE, "r") as f:
+                try:
+                    return json.load(f)
+                except json.JSONDecodeError:
+                    messagebox.showwarning("Warning", "Corrupted expense file. Starting fresh.")
+                    return []
+        return []
 
-# Main menu
-def main():
-    expenses = load_expenses()
-    while True:
-        print("=== EXPENSE TRACKER ===")
-        print("1. View Expenses")
-        print("2. Add Expense")
-        print("3. Filter by Category")
-        print("4. Show Total Spent")
-        print("5. Exit")
+    def save_expenses(self):
+        with open(EXPENSE_FILE, "w") as f:
+            json.dump(self.expenses, f, indent=4)
 
-        choice = input("Choose option: ")
-        if choice == "1":
-            show_expenses(expenses)
-        elif choice == "2":
-            add_expense(expenses)
-        elif choice == "3":
-            filter_category(expenses)
-        elif choice == "4":
-            total_spent(expenses)
-        elif choice == "5":
-            print("Goodbye!")
-            break
-        else:
-            print("Invalid option.\n")
+    # Refresh treeview
+    def refresh_treeview(self, filtered=None):
+        for row in self.tree.get_children():
+            self.tree.delete(row)
+        data = filtered if filtered is not None else self.expenses
+        for exp in data:
+            self.tree.insert("", tk.END, values=(exp['category'].title(), f"{exp['amount']:.2f}"))
+
+    # Add/Edit/Delete
+    def add_expense(self):
+        category = simpledialog.askstring("Category", "Enter category (e.g., Food, Transport):", parent=self.root)
+        if not category: return
+        try:
+            amount = float(simpledialog.askstring("Amount", "Enter amount:", parent=self.root))
+            if amount < 0: messagebox.showerror("Error", "Amount cannot be negative!"); return
+        except (ValueError, TypeError):
+            messagebox.showerror("Error", "Invalid amount entered!"); return
+        self.expenses.append({"category": category, "amount": amount})
+        self.save_expenses()
+        self.refresh_treeview()
+        messagebox.showinfo("Success", f"Expense added: {category.title()} - {amount:.2f}")
+
+    def edit_expense(self):
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showwarning("Warning", "Select an expense to edit."); return
+        idx = self.tree.index(selected[0])
+        exp = self.expenses[idx]
+        category = simpledialog.askstring("Edit Category", "Enter new category:", initialvalue=exp['category'], parent=self.root)
+        if not category: return
+        try:
+            amount = float(simpledialog.askstring("Edit Amount", "Enter new amount:", initialvalue=str(exp['amount']), parent=self.root))
+            if amount < 0: messagebox.showerror("Error", "Amount cannot be negative!"); return
+        except (ValueError, TypeError):
+            messagebox.showerror("Error", "Invalid amount entered!"); return
+        self.expenses[idx] = {"category": category, "amount": amount}
+        self.save_expenses()
+        self.refresh_treeview()
+        messagebox.showinfo("Updated", f"Expense updated: {category.title()} - {amount:.2f}")
+
+    def delete_expense(self):
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showwarning("Warning", "Select an expense to delete."); return
+        idx = self.tree.index(selected[0])
+        removed = self.expenses.pop(idx)
+        self.save_expenses()
+        self.refresh_treeview()
+        messagebox.showinfo("Deleted", f"Removed: {removed['category'].title()} - {removed['amount']:.2f}")
+
+    # Export
+    def export_expenses(self):
+        if not self.expenses:
+            messagebox.showinfo("Export", "No expenses to export."); return
+        file = filedialog.asksaveasfilename(defaultextension=".txt",
+                                            filetypes=[("Text files","*.txt"), ("CSV files","*.csv")])
+        if file:
+            with open(file, "w") as f:
+                for exp in self.expenses:
+                    f.write(f"{exp['category'].title()} - {exp['amount']:.2f}\n")
+            messagebox.showinfo("Exported", f"Expenses exported to {file}")
+
+    # Total
+    def view_total(self):
+        total = sum(exp['amount'] for exp in self.expenses)
+        messagebox.showinfo("Total Expenses", f"Total Expenses: {total:.2f}")
+
+    # Filtering
+    def apply_filter(self):
+        category = self.filter_var.get().strip().lower()
+        if not category:
+            messagebox.showwarning("Filter", "Enter a category to filter."); return
+        filtered = [exp for exp in self.expenses if exp['category'].lower() == category]
+        if not filtered: messagebox.showinfo("Filter", "No expenses found for this category.")
+        self.refresh_treeview(filtered)
+
+    def reset_filter(self):
+        self.filter_var.set("")
+        self.refresh_treeview()
+
 
 if __name__ == "__main__":
-    main()
+    root = tk.Tk()
+    app = ExpenseTracker(root)
+    root.mainloop()
